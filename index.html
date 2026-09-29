@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kill · Fix · Ship — Jev jury</title>
+<style>
+:root{--bg:#0e1114;--panel:#171d22;--accent:#4fd1a5;--bad:#e06c5f;--warn:#e0b04f;--text:#e8eef2;--dim:#7d8a94}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,sans-serif;min-height:100vh}
+header{padding:16px 22px;border-bottom:1px solid #24303a;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+h1{font-size:1.25rem}.h{color:var(--accent)}
+#keyrow{font-size:.8rem;color:var(--dim)}
+#keyrow input{background:#0a0d10;border:1px solid #2c3944;color:var(--text);padding:5px 9px;border-radius:6px;width:230px}
+main{max-width:760px;margin:0 auto;padding:20px}
+textarea{width:100%;min-height:110px;background:var(--panel);border:1px solid #2c3944;color:var(--text);padding:12px;border-radius:10px;font-size:1rem;font-family:inherit;resize:vertical}
+.row{display:flex;gap:10px;margin-top:10px;align-items:center}
+button{background:var(--accent);color:#0e1114;border:0;padding:11px 20px;border-radius:9px;font-weight:700;cursor:pointer;font-size:1rem}
+button:disabled{opacity:.35;cursor:default}
+#status{font-size:.85rem;color:var(--dim)}
+.card{background:var(--panel);border-radius:12px;padding:16px;margin-top:16px;border:1px solid #243038}
+.verdict{font-size:2rem;font-weight:800;letter-spacing:.03em}
+.v-KILL{color:var(--bad)}.v-FIX{color:var(--warn)}.v-SHIP{color:var(--accent)}
+.dim{display:flex;align-items:center;gap:10px;margin:10px 0}
+.dim label{width:170px;font-size:.9rem;color:var(--dim)}
+.bar{flex:1;height:10px;background:#0a0d10;border-radius:5px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:5px;transition:width .6s}
+.val{width:52px;text-align:right;font-variant-numeric:tabular-nums}
+.prob{font-size:.75rem;color:var(--dim);margin-top:2px}
+.fl{text-align:center;padding:18px;border-radius:12px;margin-top:16px;font-size:2.4rem;font-weight:800;border:2px solid}
+.fl small{display:block;font-size:.85rem;font-weight:400;color:var(--dim);margin-top:6px}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚖️ <span class="h">Kill · Fix · Ship</span> — a Jev jury for your idea</h1>
+  <div id="keyrow">Pollen key <input id="apikey" type="password" placeholder="sk-..."> <a href="https://github.com/pollinations/pollinations/blob/main/BRING_YOUR_OWN_POLLEN.md" target="_blank">get one ↗</a></div>
+</header>
+<main>
+  <textarea id="idea" placeholder="Describe your idea: what it is, who pays, why now…"></textarea>
+  <div class="row">
+    <button id="go">Deliver to the jury</button>
+    <span id="status"></span>
+  </div>
+  <div id="out"></div>
+  <p style="margin-top:22px;font-size:.78rem;color:var(--dim)">Every judgment is a single <code>POST /alpha/decisions</code> call to <code>gen.pollinations.ai</code> with the <code>typesafe/jev-1.13</code> model: one <b>choice</b> (verdict), four <b>score</b>s (dimensions) and one <b>noul</b> (does it convey urgency to build now?). Your code — not an LLM — assembles the page from the typed answers. Paid with your own Pollen.</p>
+</main>
+<script>
+const EP="https://gen.pollinations.ai/alpha/decisions";
+$("apikey").value=localStorage.getItem("pollen_key")||"";
+$("apikey").onchange=e=>localStorage.setItem("pollen_key",e.target.value);
+function $(i){return document.getElementById(i)}
+const DIMS=[["novelty","Novelty — is this different enough to matter?"],["demand","Demand — do people want this?"],["feasibility","Feasibility — small team, buildable now?"],["monetization","Monetization — is there a paying customer?"]];
+async function judge(){
+  const idea=$("idea").value.trim();
+  if(!idea)return $("status").textContent="Describe the idea first.";
+  const key=$("apikey").value.trim();
+  if(!key)return $("status").textContent="Enter your Pollen key first.";
+  localStorage.setItem("pollen_key",key);
+  $("go").disabled=true;$("out").innerHTML="";$("status").textContent="Jev is deliberating…";
+  const questions={verdict:{type:"choice",instructions:"The verdict for this idea.",criteria:{KILL:"Not worth pursuing.",FIX:"Salvageable with a significant change - describe what to fix.",SHIP:"Strong - build it."}}};
+  DIMS.forEach(([k,v])=>questions[k]={type:"score",instructions:v[1]});
+  questions.build_now={type:"noul",instructions:"Does this idea convey genuine urgency to build it right now?"};
+  try{
+    const t0=performance.now();
+    const r=await fetch(EP,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+key},
+      body:JSON.stringify({state:idea,questions})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error?.message||("HTTP "+r.status));
+    render(d,performance.now()-t0);
+  }catch(e){$("status").textContent="Error: "+e.message;}
+  $("go").disabled=false;
+}
+function render(d,ms){
+  const a=d.answers,s=v=>a[v].score,verdict=a.verdict.choice;
+  const avg=Math.round((DIMS.reduce((t,[k])=>t+s(k),0)/DIMS.length)*100);
+  const col={KILL:"var(--bad)",FIX:"var(--warn)",SHIP:"var(--accent)"}[verdict];
+  let html=`<div class="fl" style="border-color:${col};color:${col}">${verdict}<small>Jev verdict · confidence ${(a.verdict.confidence*100).toFixed(0)}% · ${d.usage.input_tokens}+${d.usage.output_tokens} tok · ${ms.toFixed(0)} ms</small></div>`;
+  if(a.verdict.choice==="FIX"&&a.verdict.reasoning)html+=`<div class="card">💡 ${a.verdict.reasoning}</div>`;
+  html+=`<div class="card"><h3>The scores</h3>`;
+  for(const [k,label] of DIMS.map(([k,v])=>[k,v[0]])){
+    const p=a[k].probabilities,best=Math.max(...Object.values(p));
+    html+=`<div class="dim"><label>${label}</label><div class="bar"><i style="width:${s(k)*100}%"></i></div><span class="val">${s(k).toFixed(1)}</span></div><div class="prob">legend: ${a[k].legend||"—"} · spread ${(best*100).toFixed(0)}%</div>`;
+  }
+  html+=`</div><div class="card"><h3>Urgency to build now?</h3><div class="dim"><label>build_now</label><div class="bar"><i style="width:${a.build_now.noul*100}%"></i></div><span class="val">${a.build_now.noul.toFixed(2)}</span></div><div class="prob">probability that the idea conveys genuine urgency</div></div>`;
+  $("out").innerHTML=html;
+}
+$("go").onclick=judge;
+$("idea").onkeydown=e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter")judge();};
+</script>
+</body>
+</html>
