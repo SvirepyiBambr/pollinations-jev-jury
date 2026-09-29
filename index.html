@@ -60,7 +60,7 @@ async function judge(){
   localStorage.setItem("pollen_key",key);
   $("go").disabled=true;$("out").innerHTML="";$("status").textContent="Jev is deliberating…";
   const questions={verdict:{type:"choice",instructions:"The verdict for this idea.",criteria:{KILL:"Not worth pursuing.",FIX:"Salvageable with a significant change - describe what to fix.",SHIP:"Strong - build it."}}};
-  DIMS.forEach(([k,v])=>questions[k]={type:"score",instructions:v[1]});
+  DIMS.forEach(([k,v])=>questions[k]={type:"score",instructions:v[1],criteria:["none","weak","medium","strong","excellent"]});
   questions.build_now={type:"noul",instructions:"Does this idea convey genuine urgency to build it right now?"};
   try{
     const t0=performance.now();
